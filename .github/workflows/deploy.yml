@@ -57,6 +57,13 @@ jobs:
           chmod +x scripts/update-seo-meta.sh
           ./scripts/update-seo-meta.sh dist/index.html
 
+      - name: Update sitemap domain
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          chmod +x scripts/update-sitemap-domain.sh
+          ./scripts/update-sitemap-domain.sh dist/sitemap.xml
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
