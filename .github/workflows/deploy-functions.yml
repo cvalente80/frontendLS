@@ -1,7 +1,7 @@
 name: Deploy Functions
 
 on:
-  # Manual trigger only; automatic deploys disabled for now
+  # Manual trigger only, automatic deploys disabled for now
   workflow_dispatch:
   # push:
   #   branches:
