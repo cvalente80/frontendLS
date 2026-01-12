@@ -36,11 +36,14 @@ export default function Contato() {
   const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
   const isPovoa = host.includes('povoaseg') || host.includes('povoa');
   const isLisboa = host.includes('lisboaseg') || host.includes('lisboa');
+  const isPorto = host.includes('portoseg') || host.includes('porto');
   const mapQuery = isLisboa
     ? 'Lisboa, Portugal'
     : isPovoa
       ? 'Póvoa de Santa Iria, Portugal'
-      : 'Ansião, Leiria, Portugal';
+      : isPorto
+        ? 'Porto, Portugal'
+        : 'Ansião, Leiria, Portugal';
   const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}&hl=${base === 'en' ? 'en' : 'pt-PT'}&z=13&output=embed`;
   const mapLink = `https://maps.google.com/?q=${encodeURIComponent(mapQuery)}`;
   const [form, setForm] = useState<FormState>({
@@ -180,6 +183,22 @@ export default function Contato() {
       .finally(() => setEnviando(false));
   };
 
+  const whereText = isLisboa
+    ? 'Lisboa, Portugal.'
+    : isPovoa
+      ? 'Póvoa de Santa Iria, concelho de Vila Franca de Xira.'
+      : isPorto
+        ? 'Porto, Portugal.'
+        : t('map.whereDesc');
+
+  const iframeTitle = isLisboa
+    ? 'Mapa de Lisboa, Portugal'
+    : isPovoa
+      ? 'Mapa de Póvoa de Santa Iria, Vila Franca de Xira'
+      : isPorto
+        ? 'Mapa do Porto, Portugal'
+        : t('map.iframeTitle');
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Seo
@@ -279,16 +298,10 @@ export default function Contato() {
           {/* Mapa */}
           <div>
             <h3 className="text-xl font-semibold text-blue-900 mb-3">{t('map.whereTitle')}</h3>
-            <p className="text-blue-700 mb-3">
-              {isLisboa
-                ? 'Lisboa, Portugal.'
-                : isPovoa
-                  ? 'Póvoa de Santa Iria, concelho de Vila Franca de Xira.'
-                  : t('map.whereDesc')}
-            </p>
+            <p className="text-blue-700 mb-3">{whereText}</p>
             <div className="rounded-xl overflow-hidden shadow border border-blue-200">
               <iframe
-                title={t('map.iframeTitle')}
+                title={iframeTitle}
                 src={mapSrc}
                 width="100%"
                 height="360"
