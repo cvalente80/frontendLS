@@ -1,9 +1,12 @@
-import * as admin from 'firebase-admin';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
 // Initialize Admin SDK once
-if (!admin.apps.length) {
-    admin.initializeApp();
+if (getApps().length === 0) {
+    initializeApp();
 }
 // Helper to read env vars with fallback.
 function envAny(names, fallback = '') {
@@ -39,7 +42,7 @@ const notifyOnFirstUserMessage = onDocumentCreated('chats/{chatId}/messages/{mes
     const chatId = event.params.chatId;
     if (!data || data.authorRole !== 'user')
         return;
-    const db = admin.firestore();
+    const db = getFirestore();
     const chatRef = db.doc(`chats/${chatId}`);
     const chatSnap = await chatRef.get();
     if (!chatSnap.exists)
@@ -86,4 +89,109 @@ const notifyOnFirstUserMessage = onDocumentCreated('chats/{chatId}/messages/{mes
         }
     }
     await chatRef.update({ firstNotified: true });
+});
+// HTTPS proxy to send EmailJS from server side to avoid client-side 412 errors (domain restrictions).
+// Expects JSON body: { service_id, template_id, user_id, template_params }
+export const sendContactEmail = onRequest({ cors: true }, async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    try {
+        const { service_id, template_id, user_id, template_params } = req.body ?? {};
+        if (!service_id || !template_id || !user_id || !template_params || typeof template_params !== 'object') {
+            res.status(400).json({ error: 'Missing required fields' });
+            return;
+        }
+        const body = {
+            service_id,
+            template_id,
+            user_id,
+            template_params,
+        };
+        const r = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const txt = await r.text().catch(() => '');
+        if (!r.ok) {
+            logger.error('[sendContactEmail] EmailJS error', { status: r.status, statusText: r.statusText, body: txt });
+            res.status(r.status).send(txt || r.statusText);
+            return;
+        }
+        res.status(200).json({ ok: true });
+    }
+    catch (e) {
+        logger.error('[sendContactEmail] Unexpected error', e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+// --- Admin claims management ---
+// Set or revoke the custom claim 'admin' based on Firestore documents.
+async function setAdminClaim(uid, isAdmin) {
+    try {
+        const user = await getAuth().getUser(uid);
+        const existing = user.customClaims || {};
+        const nextClaims = { ...existing };
+        if (isAdmin) {
+            nextClaims.admin = true;
+        }
+        else {
+            // Remove claim if present
+            if (nextClaims.admin)
+                delete nextClaims.admin;
+        }
+        await getAuth().setCustomUserClaims(uid, nextClaims);
+        logger.info('[setAdminClaim] Updated claims', { uid, isAdmin });
+    }
+    catch (e) {
+        logger.error('[setAdminClaim] Failed to update claims', { uid, isAdmin, error: e });
+        throw e;
+    }
+}
+// When an admin doc is created, grant admin claim
+export const onAdminDocCreated = onDocumentCreated('admins/{uid}', async (event) => {
+    const uid = event.params.uid;
+    await setAdminClaim(uid, true);
+});
+// When an admin doc is deleted, revoke admin claim
+export const onAdminDocDeleted = onDocumentDeleted('admins/{uid}', async (event) => {
+    const uid = event.params.uid;
+    await setAdminClaim(uid, false);
+});
+// If users/{uid}.isAdmin is toggled, sync claim accordingly
+export const onUserIsAdminUpdated = onDocumentUpdated('users/{uid}', async (event) => {
+    const uid = event.params.uid;
+    const before = (event.data?.before?.data() || {});
+    const after = (event.data?.after?.data() || {});
+    const prev = !!before.isAdmin;
+    const next = !!after.isAdmin;
+    if (prev !== next) {
+        await setAdminClaim(uid, next);
+    }
+});
+// HTTPS endpoint to sync admin claim for current user
+export const syncAdminClaims = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        const m = authHeader.match(/^Bearer\s+(.*)$/i);
+        if (!m) {
+            res.status(401).json({ error: 'Missing Authorization: Bearer <ID_TOKEN>' });
+            return;
+        }
+        const idToken = m[1];
+        const decoded = await getAuth().verifyIdToken(idToken);
+        const uid = decoded.uid;
+        const db = getFirestore();
+        const adminDoc = await db.doc(`admins/${uid}`).get();
+        const userDoc = await db.doc(`users/${uid}`).get();
+        const isAdmin = adminDoc.exists || !!(userDoc.exists && userDoc.data().isAdmin === true);
+        await setAdminClaim(uid, isAdmin);
+        res.status(200).json({ ok: true, uid, isAdmin });
+    }
+    catch (e) {
+        logger.error('[syncAdminClaims] error', e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
