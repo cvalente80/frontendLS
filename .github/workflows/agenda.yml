@@ -1,23 +1,22 @@
-name: Upsert news with AI
+name: Upsert agenda with AI
 
 on:
   workflow_dispatch:
     inputs:
-      title:
-        description: 'News title'
-        required: true
-      url:
-        description: 'News URL'
-        required: true
-      source:
-        description: 'Source name (newspaper/site)'
-        required: true
       region:
-        description: 'Region (ansiao|povoa|lisboa|porto|pombal|nacional)'
+        description: 'Region (ansiao|povoa|lisboa|porto)'
+        required: true
+        default: 'ansiao'
+      source_url:
+        description: 'URL da agenda oficial (Câmara Municipal ou equivalente)'
         required: false
+      month_key:
+        description: 'Mês (YYYY-MM). Em branco usa o mês atual do servidor.'
+        required: false
+        default: ''
 
 jobs:
-  upsert:
+  upsert-agenda:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,11 +31,11 @@ jobs:
         run: npm install
         working-directory: functions
 
-      - name: Upsert news document with AI summary
+      - name: Upsert agenda document with AI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
-          node scripts/upsertNewsWithAi.mjs "${{ github.event.inputs.title }}" "${{ github.event.inputs.url }}" "${{ github.event.inputs.source }}" "${{ github.event.inputs.region }}"
+          node scripts/upsertAgendaWithAi.mjs "${{ github.event.inputs.region }}" "${{ github.event.inputs.source_url }}" "${{ github.event.inputs.month_key }}"
         working-directory: functions

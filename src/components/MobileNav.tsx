@@ -16,6 +16,7 @@ export default function MobileNav() {
   const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
   let brandName = 'Ansião Seguros';
   if (host.includes('aurelio')) brandName = 'Aurélio Seguros';
+  else if (host.includes('pombalseg') || host.includes('pombal')) brandName = 'Pombal Seguros';
   else if (host.includes('povoaseg') || host.includes('povoa')) brandName = 'Póvoa Seguros';
   else if (host.includes('lisboaseg') || host.includes('lisboa')) brandName = 'Lisboa Seguros';
   else if (host.includes('portoseg') || host.includes('porto')) brandName = 'Porto Seguros';
@@ -156,6 +157,7 @@ export default function MobileNav() {
               </details>
             </li>
             <li><NavLink to={`/${base}/produtos`} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? "font-bold text-blue-900" : "hover:text-blue-900"}>{t('nav.products')}</NavLink></li>
+            <li><NavLink to={`/${base}/agenda`} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? "font-bold text-blue-900" : "hover:text-blue-900"}>{t('nav.agenda')}</NavLink></li>
             <li><NavLink to={`/${base}/noticias`} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? "font-bold text-blue-900" : "hover:text-blue-900"}>{t('nav.news')}</NavLink></li>
             <li><NavLink to={`/${base}/contato`} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? "font-bold text-blue-900" : "hover:text-blue-900"}>{t('nav.contact')}</NavLink></li>
             {/* Admin links for administrators */}

@@ -24,6 +24,7 @@ import ProdutoCondominio from "./pages/ProdutoCondominio";
 import SimulacaoCondominio from "./pages/SimulacaoCondominio";
 import PoliticaRGPD from "./pages/PoliticaRGPD";
 import Noticias from "./pages/Noticias";
+import Agenda from "./pages/Agenda";
 import './App.css';
 import ChatInbox from './pages/admin/ChatInbox';
 import ChatThread from './pages/admin/ChatThread';
@@ -48,6 +49,7 @@ function App(): React.ReactElement {
     const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
     let brandName = 'Ansião Seguros';
     if (host.includes('aurelio')) brandName = 'Aurélio Seguros';
+    else if (host.includes('pombalseg') || host.includes('pombal')) brandName = 'Pombal Seguros';
     else if (host.includes('povoaseg') || host.includes('povoa')) brandName = 'Póvoa Seguros';
     else if (host.includes('lisboaseg') || host.includes('lisboa')) brandName = 'Lisboa Seguros';
     else if (host.includes('portoseg') || host.includes('porto')) brandName = 'Porto Seguros';
@@ -106,6 +108,7 @@ function App(): React.ReactElement {
           <Route path="simulacao-condominio" element={<SimulacaoCondominio />} />
           <Route path="politica-rgpd" element={<PoliticaRGPD />} />
           <Route path="noticias" element={<Noticias />} />
+          <Route path="agenda" element={<Agenda />} />
     {/* Admin chat (guarded) */}
     <Route path="admin/inbox" element={<AdminRoute><ChatInbox /></AdminRoute>} />
     <Route path="admin/chat/:chatId" element={<AdminRoute><ChatThread /></AdminRoute>} />
