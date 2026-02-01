@@ -4,7 +4,10 @@ This directory contains end-to-end (E2E) tests for the insurance simulation appl
 
 ## Overview
 
-The E2E tests automate the complete user flow for insurance price calculation, simulating real user interactions with the application.
+The E2E tests automate the complete user flow for insurance price calculation, simulating real user interactions with the application. The tests fill out the multi-step insurance simulation form and validate that all fields can be properly populated.
+
+![Insurance Simulation Test](https://github.com/user-attachments/assets/23c526a1-0d07-46e9-a570-23404a1394ad)
+*Screenshot showing the completed insurance simulation form at step 3*
 
 ## Test Files
 
@@ -53,6 +56,22 @@ Make sure you have installed all dependencies:
 ```bash
 npm install
 ```
+
+### Environment Configuration
+
+The tests require Firebase environment variables to be set. For testing purposes, a `.env.local` file with test credentials is used. If you need to run tests in a CI environment or locally, ensure you have a `.env.local` file in the project root with the following variables:
+
+```
+VITE_FIREBASE_API_KEY=your-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
+VITE_FIREBASE_MEASUREMENT_ID=your-measurement-id
+```
+
+**Note**: A `.env.test` file with dummy values is included for local testing that doesn't require actual Firebase connectivity.
 
 ### Run tests in headless mode (default)
 
