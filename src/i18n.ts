@@ -6,6 +6,8 @@ const resources = {
   pt: {
     common: {
       brand: 'Ansião Seguros',
+      yes: 'Sim',
+      no: 'Não',
       nav: {
         homeLink: 'Início',
         auto: 'Simulação Auto',
@@ -21,6 +23,7 @@ const resources = {
         businessFleet: 'Frota (informação/produto)',
         businessWork: 'Acidentes de Trabalho (produto)',
         products: 'Produtos',
+        updates: 'Atualidade',
         agenda: 'Agenda',
         news: 'Notícias',
         contact: 'Contacto',
@@ -142,22 +145,45 @@ const resources = {
       statuses: {
         em_processamento: 'Em processamento',
         simulacao_enviada: 'Simulação enviada',
-        simulacao_recebida: 'Simulação recebida'
+        simulacao_recebida: 'Simulação recebida',
+        simulacao_aprovada_por_si: 'Simulação aprovada por si - Consulte Apólices'
       },
       loading: 'A carregar…',
       empty: 'Sem simulações para mostrar.',
       detail: {
         simTitle: 'Simulação',
+        propertyTitle: 'Imóvel',
         brand: 'Marca',
         model: 'Modelo',
         version: 'Versão',
         year: 'Ano',
         insuranceType: 'Tipo de seguro',
         holderTitle: 'Dados do Tomador',
+        holderName: 'Nome',
+        email: 'Email',
+        phone: 'Telefone',
         nif: 'NIF',
+        holderAddressTitle: 'Morada do Tomador',
+        riskAddressTitle: 'Morada do Risco',
+        riskAddressSameAsHolder: 'Igual ao tomador',
+        addressStreet: 'Morada',
+        addressPostalCode: 'Código Postal',
+        addressLocality: 'Localidade',
         birth: 'Nascimento',
         licenseDate: 'Data Carta',
         postalCode: 'Código Postal',
+        propertyType: 'Tipo de imóvel',
+        situation: 'Situação',
+        usage: 'Utilização',
+        constructionYear: 'Ano construção',
+        area: 'Área',
+        construction: 'Construção',
+        security: 'Segurança',
+        buildingCapital: 'Capital edifício',
+        contentsCapital: 'Capital conteúdo',
+        product: 'Produto',
+        extras: 'Extras',
+        details: 'Detalhes',
         coverages: 'Coberturas',
         others: 'Outros pedidos'
       },
@@ -353,6 +379,12 @@ const resources = {
         email: 'Email',
         telefone: 'Telefone',
         nif: 'NIF (Contribuinte)',
+        addressHolderTitle: 'Morada do tomador',
+        addressRiskTitle: 'Morada do risco',
+        addressStreet: 'Morada',
+        addressPostalCode: 'Código Postal',
+        addressLocality: 'Localidade',
+        riskAddressSameAsHolder: 'A morada do risco é igual à morada do tomador',
         adicionais: 'Coberturas adicionais',
         detalhesAdicionais: 'Detalhes adicionais',
         capitaisSelecionados: 'Capitais selecionados',
@@ -377,6 +409,8 @@ const resources = {
         email: 'nome@servidor.pt',
         phone: '__ _______',
         nif: '___ ___ ___',
+        addressStreet: 'Rua, nº, andar…',
+        addressLocality: 'ex.: Ansião',
         details: 'Descreva necessidades específicas ou coberturas desejadas...'
       },
       product: {
@@ -398,6 +432,8 @@ const resources = {
         emailInvalid: 'Indique um email válido.',
         phoneInvalid: 'O telefone deve ter 9 dígitos.',
         nifInvalid: 'O NIF deve ter 9 dígitos.',
+        addressHolderRequired: 'Indique a morada do tomador (morada, código postal e localidade).',
+        addressRiskRequired: 'Indique a morada do risco (morada e localidade).',
         productRequired: 'Selecione um produto.',
         rgpdRequired: 'Tem de aceitar a Política de Privacidade & RGPD.',
         submitSuccess: 'Pedido enviado com sucesso! Irá receber instruções por email.',
@@ -469,7 +505,7 @@ const resources = {
     },
     sim_auto: {
       title: 'Simulação de Seguro Auto',
-      stepProgress: 'Passo {{step}} de 3',
+      stepProgress: 'Passo {{step}} de 4',
       step1Title: 'Passo 1 - Identificação do condutor',
       step2Title: 'Passo 2 - Identificação da viatura',
       step3Title: 'Passo 3 - Produto e coberturas adicionais',
@@ -518,7 +554,7 @@ const resources = {
       baseCoverLabel: 'Coberturas base:',
       additionalCoverages: 'Coberturas adicionais:',
       baseCoversThirdParty: ['Responsabilidade civil', 'Proteção jurídica'],
-      baseCoversOwnDamage: ['Choque, colisão e capotamento', 'Furto ou roubo', 'Incêndio'],
+      baseCoversOwnDamage: ['Choque, colisão e capotamento', 'Furto ou roubo', 'Incêndio', 'Vidros', 'Ocupantes', 'Assistência em viagem'],
       coverageLabels: {
         occupants: 'Ocupantes',
         glass: 'Vidros',
@@ -786,6 +822,68 @@ const resources = {
         'Envie os documentos necessários e finalize a contratação.'
       ]
     },
+    landing_kristina: {
+      kristina: {
+        seoTitle: 'Depressão Kristin — Multirriscos Habitação',
+        seoDesc: 'Apoio rápido, orientação e simulação de Multirriscos Habitação para reforçar a proteção do seu lar.',
+        heroAlt: 'Seguro Habitação — proteção do lar',
+        heroTitle: 'Depressão Kristin: proteja a sua casa',
+        heroSubtitle: 'Se teve danos ou quer reforçar a proteção, ajudamos a encontrar um Multirriscos Habitação ajustado ao seu risco.',
+        ctaQuote: 'Simular Multirriscos Habitação',
+        ctaContact: 'Falar connosco',
+        emergencyNote: 'Em situação de emergência, contacte 112. Para apoio/seguro, fale connosco.',
+        section1Title: 'Como podemos ajudar',
+        section1Items: [
+          { icon: '🧾', title: 'Apoio na participação', desc: 'Orientação sobre documentação e próximos passos.' },
+          { icon: '🔎', title: 'Análise de coberturas', desc: 'Ajudamos a ajustar coberturas (ex.: fenómenos naturais, danos por água) ao seu caso.' },
+          { icon: '⚡', title: 'Resposta rápida', desc: 'Encaminhamos o pedido e aceleramos o contacto com a equipa certa.' },
+          { icon: '🛠️', title: 'Assistência ao lar', desc: 'Apoio em urgências domésticas, conforme as condições da apólice.' }
+        ],
+        section2Title: 'O que tipicamente se procura cobrir',
+        section2Items: [
+          { title: 'Fenómenos naturais', desc: 'Danos associados a vento forte, chuva intensa e eventos naturais, conforme apólice.' },
+          { title: 'Danos por água', desc: 'Danos por ruturas, infiltrações e fugas, conforme condições contratadas.' },
+          { title: 'Quebra de vidros', desc: 'Quebra acidental de vidros e outros elementos, conforme apólice.' },
+          { title: 'Assistência 24h', desc: 'Serviços de urgência (ex.: canalizador/eletricista), conforme apólice.' }
+        ],
+        coverageDisclaimer: 'As coberturas, exclusões e capitais dependem da seguradora e das condições particulares do contrato.',
+        section3Title: 'Próximos passos',
+        section3Steps: [
+          'Registe fotos/vídeos dos danos e garanta segurança (evite zonas instáveis).',
+          'Fale connosco com a morada do risco e um resumo do ocorrido.',
+          'Se já tem seguro, ajudamos a identificar coberturas e a preparar a participação.',
+          'Se quer reforçar proteção, faça uma simulação e propomos opções.'
+        ],
+        ctaGuide: 'Guia rápido pós-tempestade',
+        ctaQuoteSecondary: 'Fazer simulação'
+      },
+      guia: {
+        seoTitle: 'Guia pós-tempestade — Depressão Kristin',
+        seoDesc: 'Checklist rápido para agir após danos e preparar o contacto com a seguradora.',
+        title: 'Guia rápido pós-tempestade',
+        subtitle: 'Checklist para organizar informação e pedir apoio após a Depressão Kristin.',
+        ctaContact: 'Pedir apoio',
+        ctaQuote: 'Simular seguro',
+        stepsTitle: 'Checklist',
+        steps: [
+          { title: 'Segurança primeiro', desc: 'Se houver risco imediato, afaste-se e contacte os serviços de emergência.' },
+          { title: 'Registe os danos', desc: 'Fotografe/filme e anote data/hora aproximada e o que foi afetado.' },
+          { title: 'Evite agravamentos', desc: 'Sempre que seguro, proteja áreas expostas (ex.: coberturas temporárias) e guarde recibos.' },
+          { title: 'Organize documentos', desc: 'Tenha à mão identificação, morada do risco e, se existir, dados da apólice/seguradora.' },
+          { title: 'Fale connosco', desc: 'Enviamos orientação e ajudamos a avançar com participação/simulação.' }
+        ],
+        disclaimer: 'Informação geral. Não substitui as condições da sua apólice nem orientações de entidades oficiais.',
+        whatWeNeedTitle: 'Para o ajudar mais depressa, envie:',
+        whatWeNeedItems: [
+          'Nome e contacto',
+          'Morada do risco',
+          'Descrição do dano e data aproximada',
+          'Fotos/vídeos e, se existir, nº apólice/seguradora'
+        ],
+        ctaBack: 'Voltar à landing',
+        ctaContactSecondary: 'Falar connosco'
+      }
+    },
     product_mreb: {
       seoTitle: 'Seguro Multirriscos Empresarial',
       seoDesc: 'Proteja edifícios, equipamentos e mercadorias da sua empresa com coberturas flexíveis.',
@@ -1024,6 +1122,29 @@ const resources = {
     home: {
       heroTitle: 'Seguros em Ansião (Leiria) — Auto, Vida, Saúde e Habitação',
       heroDesc: 'Ansião Seguros: simulações rápidas e propostas personalizadas para Auto, Vida, Saúde, Habitação e soluções para empresas.',
+      heroTagline: 'Simulações instantâneas · Propostas personalizadas',
+      heroHeadline: 'Proteja o que mais importa, com confiança.',
+      heroSubtitle: 'Simulações rápidas e automáticas para Auto, Vida, Saúde e Habitação — tudo num só lugar, com atendimento personalizado.',
+      heroCta1: 'Simular agora',
+      heroCta2: 'Ver todos os produtos',
+      heroStats: [
+        { value: '9+', label: 'Tipos de seguro' },
+        { value: '100%', label: 'Digital' },
+        { value: '24h', label: 'Resposta rápida' },
+        { value: '★ 5.0', label: 'Satisfação' }
+      ],
+      trustBadges: [
+        'Sem compromisso',
+        'Simulação gratuita',
+        'Dados seguros',
+        'Atendimento personalizado'
+      ],
+      sectionTagIndividuals: '👤 Particulares',
+      sectionTagBusiness: '🏢 Empresas',
+      sectionTagBenefits: '⭐ Vantagens',
+      ctaBannerTitle: 'Pronto para proteger o que mais importa?',
+      ctaBannerDesc: 'Faça a sua simulação em poucos minutos e receba uma proposta personalizada.',
+      ctaBannerContact: 'Fale connosco',
       featuredIndividuals: 'Produtos para pessoas particulares',
       heroSlides: [
         {
@@ -1070,6 +1191,8 @@ const resources = {
   en: {
     common: {
       brand: 'Ansião Seguros',
+      yes: 'Yes',
+      no: 'No',
       nav: {
         homeLink: 'Home',
         auto: 'Car Quote',
@@ -1084,6 +1207,7 @@ const resources = {
         businessMreb: 'Business Multi-risk (info)',
         businessFleet: 'Fleet (info)',
         businessWork: 'Workers’ Compensation (info)',
+        updates: 'Updates',
         products: 'Products',
         agenda: 'Agenda',
         news: 'News',
@@ -1200,22 +1324,45 @@ const resources = {
       statuses: {
         em_processamento: 'Processing',
         simulacao_enviada: 'Quote sent',
-        simulacao_recebida: 'Quote received'
+        simulacao_recebida: 'Quote received',
+        simulacao_aprovada_por_si: 'Approved by you — check Policies'
       },
       loading: 'Loading…',
       empty: 'No quotes to display.',
       detail: {
         simTitle: 'Quote',
+        propertyTitle: 'Property',
         brand: 'Make',
         model: 'Model',
         version: 'Version',
         year: 'Year',
         insuranceType: 'Insurance type',
         holderTitle: 'Policyholder details',
+        holderName: 'Name',
+        email: 'Email',
+        phone: 'Phone',
         nif: 'NIF',
+        holderAddressTitle: 'Policyholder address',
+        riskAddressTitle: 'Risk address',
+        riskAddressSameAsHolder: 'Same as policyholder',
+        addressStreet: 'Address',
+        addressPostalCode: 'Postcode',
+        addressLocality: 'City/Town',
         birth: 'Date of birth',
         licenseDate: 'Driving licence date',
         postalCode: 'Postcode',
+        propertyType: 'Property type',
+        situation: 'Occupancy',
+        usage: 'Use',
+        constructionYear: 'Year built',
+        area: 'Area',
+        construction: 'Construction',
+        security: 'Security',
+        buildingCapital: 'Building sum insured',
+        contentsCapital: 'Contents sum insured',
+        product: 'Product',
+        extras: 'Extras',
+        details: 'Notes',
         coverages: 'Cover',
         others: 'Other requests'
       },
@@ -1404,6 +1551,12 @@ const resources = {
         email: 'Email',
         telefone: 'Phone',
         nif: 'Portuguese NIF (Tax ID)',
+          addressHolderTitle: 'Policyholder address',
+          addressRiskTitle: 'Risk address',
+          addressStreet: 'Address',
+          addressPostalCode: 'Postcode',
+          addressLocality: 'City/Town',
+          riskAddressSameAsHolder: 'Risk address is the same as the policyholder address',
   adicionais: 'Additional cover',
         detalhesAdicionais: 'Additional details',
         capitaisSelecionados: 'Selected sums insured',
@@ -1428,6 +1581,8 @@ const resources = {
         email: 'name@server.pt',
         phone: '__ _______',
         nif: '___ ___ ___',
+        addressStreet: 'Street, number, floor…',
+        addressLocality: 'e.g., Ansião',
         details: 'Describe any specific needs or desired cover...'
       },
       product: {
@@ -1449,6 +1604,8 @@ const resources = {
         emailInvalid: 'Enter a valid email.',
         phoneInvalid: 'Phone must have 9 digits.',
         nifInvalid: 'NIF must have 9 digits.',
+        addressHolderRequired: 'Enter the policyholder address (address, postcode and city/town).',
+        addressRiskRequired: 'Enter the risk address (address and city/town).',
         productRequired: 'Select a product.',
         rgpdRequired: 'You must accept the Privacy Policy & GDPR.',
         submitSuccess: 'Request sent successfully! You will receive instructions by email.',
@@ -1520,7 +1677,7 @@ const resources = {
     },
     sim_auto: {
       title: 'Car Insurance Quote',
-      stepProgress: 'Step {{step}} of 3',
+      stepProgress: 'Step {{step}} of 4',
       step1Title: 'Step 1 — Driver details',
       step2Title: 'Step 2 — Vehicle details',
       step3Title: 'Step 3 — Product and additional cover',
@@ -1569,7 +1726,7 @@ const resources = {
       baseCoverLabel: 'Core cover:',
       additionalCoverages: 'Additional cover:',
       baseCoversThirdParty: ['Third party liability', 'Legal expenses'],
-      baseCoversOwnDamage: ['Accidental damage', 'Theft', 'Fire'],
+      baseCoversOwnDamage: ['Accidental damage', 'Theft', 'Fire', 'Windscreen cover', 'Personal accident (occupants)', 'Roadside assistance'],
       coverageLabels: {
         occupants: 'Personal accident (occupants)',
         glass: 'Windscreen cover',
@@ -1838,6 +1995,68 @@ const resources = {
         'Send the required documents and complete the purchase.'
       ]
     },
+    landing_kristina: {
+      kristina: {
+        seoTitle: 'Storm Kristin — Home Insurance',
+        seoDesc: 'Fast support, guidance and a home insurance quote to strengthen protection for your home.',
+        heroAlt: 'Home insurance — home protection',
+        heroTitle: 'Storm Kristin: protect your home',
+        heroSubtitle: 'If you had damage or want better protection, we help you find cover that fits your risk.',
+        ctaQuote: 'Get a home insurance quote',
+        ctaContact: 'Contact us',
+        emergencyNote: 'In an emergency, call 112. For insurance support, contact us.',
+        section1Title: 'How we can help',
+        section1Items: [
+          { icon: '🧾', title: 'Claims guidance', desc: 'Help with what to gather and next steps.' },
+          { icon: '🔎', title: 'Cover review', desc: 'We help align cover (e.g., natural events, water damage) to your case.' },
+          { icon: '⚡', title: 'Quick response', desc: 'We route your request to the right team with minimal friction.' },
+          { icon: '🛠️', title: 'Home assistance', desc: 'Emergency home services, subject to policy terms.' }
+        ],
+        section2Title: 'Typical cover needs',
+        section2Items: [
+          { title: 'Natural events', desc: 'Damage linked to strong wind, heavy rain and other events, subject to policy terms.' },
+          { title: 'Water damage', desc: 'Damage from leaks/bursts/infiltrations, subject to the selected cover.' },
+          { title: 'Glass breakage', desc: 'Accidental glass breakage and related elements, subject to policy terms.' },
+          { title: '24/7 assistance', desc: 'Emergency services (e.g., plumber/electrician), subject to policy terms.' }
+        ],
+        coverageDisclaimer: 'Cover, exclusions and sums insured depend on the insurer and your specific policy schedule/terms.',
+        section3Title: 'Next steps',
+        section3Steps: [
+          'Take photos/videos of the damage and prioritise safety.',
+          'Contact us with the risk address and a short summary of what happened.',
+          'If you already have insurance, we help identify cover and prepare the claim notice.',
+          'If you want stronger protection, run a quote and we will propose options.'
+        ],
+        ctaGuide: 'Post-storm quick guide',
+        ctaQuoteSecondary: 'Get a quote'
+      },
+      guia: {
+        seoTitle: 'Post-storm guide — Storm Kristin',
+        seoDesc: 'Quick checklist to act after damage and prepare your insurer contact.',
+        title: 'Post-storm quick guide',
+        subtitle: 'Checklist to organise information and ask for support after Storm Kristin.',
+        ctaContact: 'Get support',
+        ctaQuote: 'Get a quote',
+        stepsTitle: 'Checklist',
+        steps: [
+          { title: 'Safety first', desc: 'If there is immediate danger, move away and call emergency services.' },
+          { title: 'Record the damage', desc: 'Take photos/videos and note an approximate date/time and what was affected.' },
+          { title: 'Prevent further loss', desc: 'If safe, protect exposed areas and keep receipts for emergency mitigation.' },
+          { title: 'Gather details', desc: 'Have your ID, risk address and (if available) policy/insurer information ready.' },
+          { title: 'Contact us', desc: 'We guide you through claim notice or a new quote.' }
+        ],
+        disclaimer: 'General information only. It does not replace your policy terms or official guidance.',
+        whatWeNeedTitle: 'To help faster, send:',
+        whatWeNeedItems: [
+          'Name and contact',
+          'Risk address',
+          'Damage summary and approximate date',
+          'Photos/videos and (if available) policy/insurer details'
+        ],
+        ctaBack: 'Back to landing',
+        ctaContactSecondary: 'Contact us'
+      }
+    },
     product_mreb: {
       seoTitle: 'Commercial Multi‑risk Insurance',
       seoDesc: 'Protect your company’s buildings, equipment and goods with flexible cover.',
@@ -2075,6 +2294,29 @@ const resources = {
     home: {
       heroTitle: 'Insurance in Ansião (Leiria) — Auto, Life, Health and Home',
       heroDesc: 'Ansião Seguros: fast quotes and tailored proposals for Auto, Life, Health, Home and business solutions.',
+      heroTagline: 'Instant quotes · Tailored proposals',
+      heroHeadline: 'Protect what matters most, with confidence.',
+      heroSubtitle: 'Fast, automated quotes for Auto, Life, Health and Home — all in one place, with personalised service.',
+      heroCta1: 'Get a quote now',
+      heroCta2: 'View all products',
+      heroStats: [
+        { value: '9+', label: 'Insurance types' },
+        { value: '100%', label: 'Digital' },
+        { value: '24h', label: 'Fast response' },
+        { value: '★ 5.0', label: 'Satisfaction' }
+      ],
+      trustBadges: [
+        'No commitment',
+        'Free quote',
+        'Secure data',
+        'Personalised service'
+      ],
+      sectionTagIndividuals: '👤 Individuals',
+      sectionTagBusiness: '🏢 Business',
+      sectionTagBenefits: '⭐ Advantages',
+      ctaBannerTitle: 'Ready to protect what matters most?',
+      ctaBannerDesc: 'Get your quote in just a few minutes and receive a tailored proposal.',
+      ctaBannerContact: 'Contact us',
       featuredIndividuals: 'Products for individuals',
       heroSlides: [
         {

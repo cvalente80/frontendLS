@@ -1,17 +1,18 @@
-import React, { useState, ChangeEvent, FormEvent, useRef } from "react";
+import React, { useState, ChangeEvent, FormEvent, useRef, useEffect } from "react";
 import Seo from "../components/Seo";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { pt } from "date-fns/locale/pt";
 import { enGB } from "date-fns/locale/en-GB";
 import "react-datepicker/dist/react-datepicker.css";
-import { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID } from "../emailjs.config";
-import emailjs from "@emailjs/browser";
+import { safeEmailSend, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID } from "../emailjs.config";
 import { Trans, useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAuthUX } from '../context/AuthUXContext';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { saveSimulation } from '../utils/simulations';
+import { enqueueSimulationTransferJob } from '../utils/simulationTransferJobs';
 registerLocale("pt", pt);
 registerLocale("en", enGB);
 
@@ -41,7 +42,10 @@ export default function SimulacaoAuto() {
   const base = lang === 'en' ? 'en' : 'pt';
   const { user } = useAuth();
   const { requireAuth } = useAuthUX();
-  const [step, setStep] = useState<number>(1);
+  const [step, setStep] = useState<number>(() => {
+    const saved = sessionStorage.getItem('sim_auto_step');
+    return saved ? Number(saved) : 1;
+  });
   const [form, setForm] = useState<FormState>({
     nome: "",
     email: "",
@@ -68,6 +72,50 @@ export default function SimulacaoAuto() {
   const [mensagemTipo, setMensagemTipo] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const busyRef = useRef(false);
+  const [transferJobId, setTransferJobId] = useState<string | null>(() =>
+    sessionStorage.getItem('sim_auto_job_id')
+  );
+  const [simulationResult, setSimulationResult] = useState<{
+    accordionValues?: { anual?: string | null; semestral?: string | null; trimestral?: string | null; mensal?: string | null } | null;
+    coberturasPremiumTotal?: string | null;
+    status?: string;
+  } | null>(null);
+  const [selectedPeriodicity, setSelectedPeriodicity] = useState<'anual' | 'semestral' | 'trimestral' | 'mensal' | null>(null);
+  const [isSavingChoice, setIsSavingChoice] = useState(false);
+  const [choiceSaved, setChoiceSaved] = useState(false);
+  const transferTargetUrl = 'https://myzurich.zurich.com.pt/';
+
+  // Persistir step e jobId em sessionStorage para sobreviver a recarregamentos
+  useEffect(() => {
+    sessionStorage.setItem('sim_auto_step', String(step));
+  }, [step]);
+  useEffect(() => {
+    if (transferJobId) sessionStorage.setItem('sim_auto_job_id', transferJobId);
+    else sessionStorage.removeItem('sim_auto_job_id');
+  }, [transferJobId]);
+
+  // Listener em tempo real ao job de transferência — actualiza simulationResult quando o Playwright terminar
+  useEffect(() => {
+    if (!transferJobId) return;
+    // Timeout de 7 minutos — se o script não terminar, mostra erro
+    const timeoutId = setTimeout(() => {
+      setSimulationResult({ status: 'failed' });
+    }, 7 * 60 * 1000);
+    const unsub = onSnapshot(doc(db, 'simulationTransferJobs', transferJobId), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data?.status === 'completed' && data?.result?.accordionValues) {
+        clearTimeout(timeoutId);
+        setSimulationResult(data.result);
+        setStep(4);
+      } else if (data?.status === 'failed' || (data?.status === 'completed' && !data?.result?.accordionValues)) {
+        clearTimeout(timeoutId);
+        setSimulationResult({ status: 'failed' });
+        setStep(4);
+      }
+    });
+    return () => { unsub(); clearTimeout(timeoutId); };
+  }, [transferJobId]);
 
   // Determina a "marca" do site actual (para assinatura dinâmica no email)
   const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
@@ -193,7 +241,15 @@ export default function SimulacaoAuto() {
       }, 6000);
       return;
     }
-  const resumo = `${t('summary.title')} ${form.marca} ${form.modelo}${form.versao ? ' ' + form.versao : ''} (${form.ano}) - ${form.tipoSeguro}\n${t('summary.labels.nif')} ${form.contribuinte}\n${t('summary.labels.birthDate')} ${form.dataNascimento ? formatDate(form.dataNascimento) : '-'}\n${t('summary.labels.licenseDate')} ${form.dataCartaConducao ? formatDate(form.dataCartaConducao) : '-'}\n${t('summary.labels.postalCode')} ${form.codigoPostal || '-'}\n${t('summary.labels.version')} ${form.versao?.trim() ? form.versao.trim() : '-'}\n${t('summary.labels.coverages')} ${form.coberturas.join(", ")}\n${t('summary.labels.otherRequests')} ${form.outrosPedidos?.trim() ? form.outrosPedidos.trim() : '-'}`;
+    const baseCovers =
+      form.tipoSeguro === t('typeThirdParty')
+        ? ((t('baseCoversThirdParty', { returnObjects: true }) as unknown) as string[])
+        : form.tipoSeguro === t('typeOwnDamage')
+          ? ((t('baseCoversOwnDamage', { returnObjects: true }) as unknown) as string[])
+          : [];
+    const coveragesForSubmit = Array.from(new Set([...(baseCovers || []), ...(form.coberturas || [])]));
+
+  const resumo = `${t('summary.title')} ${form.marca} ${form.modelo}${form.versao ? ' ' + form.versao : ''} (${form.ano}) - ${form.tipoSeguro}\n${t('summary.labels.nif')} ${form.contribuinte}\n${t('summary.labels.birthDate')} ${form.dataNascimento ? formatDate(form.dataNascimento) : '-'}\n${t('summary.labels.licenseDate')} ${form.dataCartaConducao ? formatDate(form.dataCartaConducao) : '-'}\n${t('summary.labels.postalCode')} ${form.codigoPostal || '-'}\n${t('summary.labels.version')} ${form.versao?.trim() ? form.versao.trim() : '-'}\n${t('summary.labels.coverages')} ${coveragesForSubmit.join(", ")}\n${t('summary.labels.otherRequests')} ${form.outrosPedidos?.trim() ? form.outrosPedidos.trim() : '-'}`;
     setResultado(resumo);
 
     // Enviar email via EmailJS
@@ -210,26 +266,52 @@ export default function SimulacaoAuto() {
       ano: form.ano,
       matricula: form.matricula,
       tipoSeguro: form.tipoSeguro,
-      coberturas: form.coberturas.join(", "),
+      coberturas: coveragesForSubmit.join(", "),
       outrosPedidos: form.outrosPedidos?.trim() ? form.outrosPedidos.trim() : '-',
       resultado: resumo,
       // Usado no template EmailJS como {{siteURL}} Seguros
       siteURL: siteBrand,
     };
+
+    try {
+      const bridgePayload = {
+        nome: form.nome,
+        email: form.email,
+        contribuinte: form.contribuinte,
+        dataNascimento: form.dataNascimento,
+        dataCartaConducao: form.dataCartaConducao,
+        codigoPostal: form.codigoPostal,
+        marca: form.marca,
+        modelo: form.modelo,
+        versao: form.versao,
+        ano: form.ano,
+        matricula: form.matricula,
+        tipoSeguro: form.tipoSeguro,
+        coberturas: coveragesForSubmit,
+        outrosPedidos: form.outrosPedidos,
+        capturedAt: new Date().toISOString(),
+      };
+      localStorage.setItem('latestAutoSimulationPayload', JSON.stringify(bridgePayload));
+    } catch (error) {
+      console.warn('[SimulacaoAuto] Falha ao persistir payload local (ignorado):', error);
+    }
+
     try {
       // Firestore persistence if authenticated (will be after requireAuth)
       const uid = auth.currentUser?.uid;
       if (uid) {
+        // Generate a deterministic idempotency key for this combination and minute
+        const minuteBucket = new Date(); minuteBucket.setSeconds(0,0);
+        const key = [
+          'auto',
+          form.email || 'anon',
+          (form.matricula || '').replace(/[^A-Za-z0-9]/g,'').toUpperCase(),
+          minuteBucket.toISOString(),
+        ].join(':');
+
+        let sourceSimulationId: string | undefined;
         try {
-          // Generate a deterministic idempotency key for this combination and minute
-          const minuteBucket = new Date(); minuteBucket.setSeconds(0,0);
-          const key = [
-            'auto',
-            form.email || 'anon',
-            (form.matricula || '').replace(/[^A-Za-z0-9]/g,'').toUpperCase(),
-            minuteBucket.toISOString(),
-          ].join(':');
-          await saveSimulation(uid, {
+          sourceSimulationId = await saveSimulation(uid, {
             type: 'auto',
             title: `${form.marca || ''} ${form.modelo || ''}`.trim() || 'Auto',
             summary: resumo,
@@ -247,19 +329,52 @@ export default function SimulacaoAuto() {
               ano: form.ano,
               matricula: form.matricula,
               tipoSeguro: form.tipoSeguro,
-              coberturas: form.coberturas,
+              coberturas: coveragesForSubmit,
               outrosPedidos: form.outrosPedidos,
             }
           }, { idempotencyKey: key });
         } catch (e) {
           console.warn('[SimulacaoAuto] Falha a guardar simulação (ignorado):', e);
         }
+
+        try {
+          const jobId = await enqueueSimulationTransferJob({
+            uid,
+            simulationType: 'auto',
+            sourceSimulationId,
+            idempotencyKey: key,
+            targetUrl: transferTargetUrl,
+            payload: {
+              nome: form.nome,
+              email: form.email,
+              matricula: form.matricula,
+              plate: form.matricula,
+              codigoPostal: form.codigoPostal,
+              postalCode: form.codigoPostal,
+              dataNascimento: form.dataNascimento,
+              birthDate: form.dataNascimento,
+              contribuinte: form.contribuinte,
+              marca: form.marca,
+              modelo: form.modelo,
+              versao: form.versao,
+              ano: form.ano,
+              tipoSeguro: form.tipoSeguro,
+              coberturas: coveragesForSubmit,
+              outrosPedidos: form.outrosPedidos,
+            },
+          });
+          if (jobId) setTransferJobId(jobId);
+        } catch (e) {
+          console.warn('[SimulacaoAuto] Falha ao enfileirar transferência Playwright (ignorado):', e);
+        }
       }
   console.log('[EmailJS][Auto] Sending', { service: EMAILJS_SERVICE_ID, template: EMAILJS_TEMPLATE_ID });
-  const resp = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_USER_ID);
+  const resp = await safeEmailSend(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_USER_ID);
   console.log('[EmailJS][Auto] Success', resp?.status, resp?.text);
       setMensagem(t('messages.submitSuccess'));
       setMensagemTipo('sucesso');
+      // Avança para o passo 4 (aguarda resultados via listener Firestore)
+      setStep(4);
     } catch (error: any) {
       console.error('[EmailJS][Auto] Error', error);
         setMensagem(t('messages.submitEmailError'));
@@ -322,11 +437,11 @@ export default function SimulacaoAuto() {
         canonicalPath={`/${base}/simulacao-auto`}
       />
       <img src="https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80" alt="Road" className="absolute inset-0 w-full h-full object-cover opacity-30" />
-      <div className="max-w-lg w-full p-8 bg-white bg-opacity-90 rounded-2xl shadow-xl relative z-10">
+      <div className="as-card max-w-lg w-full p-8 bg-white/90 shadow-xl relative z-10">
         <h2 className="text-3xl font-bold mb-6 text-blue-900 text-center">{t('title')}</h2>
         <div className="mb-6">
           <div className="flex items-center justify-center gap-2 mb-2">
-            {[1,2,3].map(n => (
+            {[1,2,3,4].map(n => (
               <div
                 key={n}
                 className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-white transition-all duration-300 ${step >= n ? 'bg-blue-700 scale-110' : 'bg-blue-300 scale-100'}`}
@@ -338,10 +453,10 @@ export default function SimulacaoAuto() {
           <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
             <div
               className="h-2 bg-blue-700 transition-all duration-500"
-              style={{ width: `${step * 33.33}%` }}
+              style={{ width: `${step * 25}%` }}
             />
           </div>
-          <div className="text-center text-blue-700 font-medium mt-2">{t('stepProgress', { step, defaultValue: base==='en' ? `Step ${step} of 3` : `Passo ${step} de 3` })}</div>
+          <div className="text-center text-blue-700 font-medium mt-2">{t('stepProgress', { step, defaultValue: base==='en' ? `Step ${step} of 4` : `Passo ${step} de 4` })}</div>
         </div>
         <form onSubmit={step === 3 ? handleSubmit : handleNext} className="space-y-5">
           {step === 1 && (
@@ -352,7 +467,7 @@ export default function SimulacaoAuto() {
                 value={form.nome}
                 onChange={handleChange}
                 placeholder={t('placeholders.name')}
-                className={`w-full p-3 border rounded-lg ${form.nome && !nomeCompletoValido(form.nome) ? 'border-red-500' : 'border-blue-300'}`}
+                className={`as-input ${form.nome && !nomeCompletoValido(form.nome) ? 'border-red-500' : 'border-blue-300'}`}
                 required
                 onBlur={e => {
                   if (!nomeCompletoValido(e.target.value)) {
@@ -373,7 +488,7 @@ export default function SimulacaoAuto() {
                 value={form.email}
                 onChange={handleChange}
                 placeholder={t('placeholders.email')}
-                className="w-full p-3 border border-blue-300 rounded-lg"
+                className="as-input border-blue-300"
                 required
                 pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
                 onInvalid={e => {
@@ -405,7 +520,7 @@ export default function SimulacaoAuto() {
                   locale={base}
                   dateFormat="dd-MM-yyyy"
                   placeholderText={t('placeholders.birthDate')}
-                  className="w-full p-3 border border-blue-300 rounded-lg pr-10"
+                  className="as-input border-blue-300 pr-10"
                   required
                   todayButton={base==='en' ? 'Today' : 'Hoje'}
                   isClearable
@@ -418,7 +533,7 @@ export default function SimulacaoAuto() {
                   customInput={
                     React.createElement('input', {
                       type: 'text',
-                      className: 'w-full p-3 border border-blue-300 rounded-lg pr-10',
+                      className: 'as-input border-blue-300 pr-10',
                       value: form.dataNascimentoManual || '',
                       required: true,
                       readOnly: true,
@@ -482,7 +597,7 @@ export default function SimulacaoAuto() {
                   locale={base}
                   dateFormat="dd-MM-yyyy"
                   placeholderText={t('placeholders.licenseDate')}
-                  className="w-full p-3 border border-blue-300 rounded-lg pr-10"
+                  className="as-input border-blue-300 pr-10"
                   required
                   todayButton={base==='en' ? 'Today' : 'Hoje'}
                   isClearable
@@ -495,7 +610,7 @@ export default function SimulacaoAuto() {
                   customInput={
                     React.createElement('input', {
                       type: 'text',
-                      className: 'w-full p-3 border border-blue-300 rounded-lg pr-10',
+                      className: 'as-input border-blue-300 pr-10',
                       value: form.dataCartaConducaoManual !== undefined ? form.dataCartaConducaoManual : (form.dataCartaConducao ? formatDate(form.dataCartaConducao) : ''),
                       required: true,
                       readOnly: true,
@@ -554,7 +669,7 @@ export default function SimulacaoAuto() {
                   setForm({ ...form, codigoPostal: v });
                 }}
                 placeholder={t('placeholders.postalCode')}
-                className="w-full p-3 border border-blue-300 rounded-lg mt-2"
+                className="as-input border-blue-300 mt-2"
                 maxLength={8}
                 required
                 pattern="^\d{4}-\d{3}$"
@@ -575,7 +690,7 @@ export default function SimulacaoAuto() {
                 value={form.contribuinte || ""}
                 onChange={handleChange}
                 placeholder={t('placeholders.nif')}
-                className={`w-full p-3 border rounded-lg ${form.contribuinte && !validarNIF(form.contribuinte) ? 'border-red-500' : 'border-blue-300'}`}
+                className={`as-input ${form.contribuinte && !validarNIF(form.contribuinte) ? 'border-red-500' : 'border-blue-300'}`}
                 required
                 pattern="[0-9]{9}"
                 maxLength={9}
@@ -594,8 +709,8 @@ export default function SimulacaoAuto() {
                 <div className="text-red-600 text-sm mt-1">{t('validations.nifInvalid')}</div>
               )}
               <div className="flex justify-end gap-2">
-                <button type="button" className="px-6 py-2 bg-gray-200 rounded" disabled>{t('buttons.prev')}</button>
-                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded font-bold hover:bg-blue-900 transition">{t('buttons.next')}</button>
+                <button type="button" className="as-btn bg-gray-200 text-slate-900 hover:bg-gray-300" disabled>{t('buttons.prev')}</button>
+                <button type="submit" className="as-btn bg-blue-700 text-white hover:bg-blue-900">{t('buttons.next')}</button>
               </div>
             </>
           )}
@@ -604,15 +719,15 @@ export default function SimulacaoAuto() {
               <h3 className="text-xl font-semibold text-blue-700 mb-2 text-center">{t('step2Title')}</h3>
               <div className="space-y-4">
                 <div>
-                  <input name="marca" value={form.marca || ""} onChange={handleChange} placeholder={t('placeholders.carBrand')} className="w-full p-3 border border-blue-300 rounded-lg" required onInvalid={e => setCustomValidity(e, t('validations.brandRequired'))} onInput={e => setCustomValidity(e, '')} />
+                  <input name="marca" value={form.marca || ""} onChange={handleChange} placeholder={t('placeholders.carBrand')} className="as-input border-blue-300" required onInvalid={e => setCustomValidity(e, t('validations.brandRequired'))} onInput={e => setCustomValidity(e, '')} />
                   <div className="text-[11px] text-blue-600 mt-1 italic pl-1 text-left">{t('examples.brand')}</div>
                 </div>
                 <div>
-                  <input name="modelo" value={form.modelo} onChange={handleChange} placeholder={t('placeholders.carModel')} className="w-full p-3 border border-blue-300 rounded-lg" required onInvalid={e => setCustomValidity(e, t('validations.modelRequired'))} onInput={e => setCustomValidity(e, '')} />
+                  <input name="modelo" value={form.modelo} onChange={handleChange} placeholder={t('placeholders.carModel')} className="as-input border-blue-300" required onInvalid={e => setCustomValidity(e, t('validations.modelRequired'))} onInput={e => setCustomValidity(e, '')} />
                   <div className="text-[11px] text-blue-600 mt-1 italic pl-1 text-left">{t('examples.model')}</div>
                 </div>
                 <div>
-                  <input name="versao" value={form.versao || ''} onChange={handleChange} placeholder={t('placeholders.carVersion')} className="w-full p-3 border border-blue-300 rounded-lg" />
+                  <input name="versao" value={form.versao || ''} onChange={handleChange} placeholder={t('placeholders.carVersion')} className="as-input border-blue-300" />
                   <div className="text-[11px] text-blue-600 mt-1 italic pl-1 text-left">{t('examples.version')}</div>
                 </div>
                 <div>
@@ -620,7 +735,7 @@ export default function SimulacaoAuto() {
   let v = e.target.value.replace(/[^\d]/g, "");
   if (v.length > 4) v = v.slice(0, 4);
   setForm({ ...form, ano: v });
-}} placeholder={t('placeholders.carYear')} className="w-full p-3 border border-blue-300 rounded-lg" required maxLength={4} onInvalid={e => setCustomValidity(e, t('validations.yearRequired'))} onInput={e => setCustomValidity(e, '')} />
+}} placeholder={t('placeholders.carYear')} className="as-input border-blue-300" required maxLength={4} onInvalid={e => setCustomValidity(e, t('validations.yearRequired'))} onInput={e => setCustomValidity(e, '')} />
                   <div className="text-[11px] text-blue-600 mt-1 italic pl-1 text-left">{t('examples.year')}</div>
                 </div>
               </div>
@@ -654,8 +769,8 @@ export default function SimulacaoAuto() {
   )}
 </div>
               <div className="flex justify-between gap-2">
-                <button type="button" onClick={handlePrev} className="px-6 py-2 bg-gray-200 rounded">{t('buttons.prev')}</button>
-                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded font-bold hover:bg-blue-900 transition">{t('buttons.next')}</button>
+                <button type="button" onClick={handlePrev} className="as-btn bg-gray-200 text-slate-900 hover:bg-gray-300">{t('buttons.prev')}</button>
+                <button type="submit" className="as-btn bg-blue-700 text-white hover:bg-blue-900">{t('buttons.next')}</button>
               </div>
             </>
           )}
@@ -663,7 +778,7 @@ export default function SimulacaoAuto() {
             <>
               <h3 className="text-xl font-semibold text-blue-700 mb-2 text-center">{t('step3Title')}</h3>
               <label className="block font-semibold mb-2 text-left" htmlFor="tipoSeguro">{t('typeLabel')}</label>
-<select id="tipoSeguro" name="tipoSeguro" value={form.tipoSeguro || ""} onChange={handleChange} className="w-full p-3 border border-blue-300 rounded-lg text-left" required onInvalid={e => setCustomValidity(e, t('messages.selectType'))} onInput={e => setCustomValidity(e, '')}>
+<select id="tipoSeguro" name="tipoSeguro" value={form.tipoSeguro || ""} onChange={handleChange} className="as-select border-blue-300 text-left" required onInvalid={e => setCustomValidity(e, t('messages.selectType'))} onInput={e => setCustomValidity(e, '')}>
 
   <option value="">{t('typeSelectPlaceholder')}</option>
   <option value={t('typeThirdParty')}>{t('typeThirdParty')}</option>
@@ -679,32 +794,32 @@ export default function SimulacaoAuto() {
               {form.tipoSeguro === t('typeThirdParty') && (
   <div className="flex flex-col gap-2 mb-2">
     {(t('baseCoversThirdParty', { returnObjects: true }) as string[]).map((label, i) => (
-      <label key={i}><input type="checkbox" checked disabled /> {label}</label>
+      <label key={i} className="inline-flex items-center gap-2"><input type="checkbox" checked disabled className="as-checkbox" /> {label}</label>
     ))}
   </div>
 )}
 {form.tipoSeguro === t('typeOwnDamage') && (
   <div className="flex flex-col gap-2 mb-2">
     {(t('baseCoversOwnDamage', { returnObjects: true }) as string[]).map((label, i) => (
-      <label key={i}><input type="checkbox" checked disabled /> {label}</label>
+      <label key={i} className="inline-flex items-center gap-2"><input type="checkbox" checked disabled className="as-checkbox" /> {label}</label>
     ))}
   </div>
 )}
 <label className="block font-semibold mb-2">{t('additionalCoverages')}</label>
               {form.tipoSeguro === t('typeThirdParty') && (
   <div className="flex flex-col gap-2">
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.occupants')} checked={form.coberturas.includes(t('coverageLabels.occupants'))} onChange={handleChange} /> {t('coverageLabels.occupants')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.glass')} checked={form.coberturas.includes(t('coverageLabels.glass'))} onChange={handleChange} /> {t('coverageLabels.glass')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.assistance')} checked={form.coberturas.includes(t('coverageLabels.assistance'))} onChange={handleChange} /> {t('coverageLabels.assistance')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.fire')} checked={form.coberturas.includes(t('coverageLabels.fire'))} onChange={handleChange} /> {t('coverageLabels.fire')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.theft')} checked={form.coberturas.includes(t('coverageLabels.theft'))} onChange={handleChange} /> {t('coverageLabels.theft')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.occupants')} checked={form.coberturas.includes(t('coverageLabels.occupants'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.occupants')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.glass')} checked={form.coberturas.includes(t('coverageLabels.glass'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.glass')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.assistance')} checked={form.coberturas.includes(t('coverageLabels.assistance'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.assistance')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.fire')} checked={form.coberturas.includes(t('coverageLabels.fire'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.fire')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.theft')} checked={form.coberturas.includes(t('coverageLabels.theft'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.theft')}</label>
   </div>
 )}
 {form.tipoSeguro === t('typeOwnDamage') && (
   <div className="flex flex-col gap-2">
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.naturalCatastrophes')} checked={form.coberturas.includes(t('coverageLabels.naturalCatastrophes'))} onChange={handleChange} /> {t('coverageLabels.naturalCatastrophes')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.vandalism')} checked={form.coberturas.includes(t('coverageLabels.vandalism'))} onChange={handleChange} /> {t('coverageLabels.vandalism')}</label>
-    <label><input type="checkbox" name="coberturas" value={t('coverageLabels.replacementVehicle')} checked={form.coberturas.includes(t('coverageLabels.replacementVehicle'))} onChange={handleChange} /> {t('coverageLabels.replacementVehicle')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.naturalCatastrophes')} checked={form.coberturas.includes(t('coverageLabels.naturalCatastrophes'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.naturalCatastrophes')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.vandalism')} checked={form.coberturas.includes(t('coverageLabels.vandalism'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.vandalism')}</label>
+    <label className="inline-flex items-center gap-2"><input type="checkbox" name="coberturas" value={t('coverageLabels.replacementVehicle')} checked={form.coberturas.includes(t('coverageLabels.replacementVehicle'))} onChange={handleChange} className="as-checkbox" /> {t('coverageLabels.replacementVehicle')}</label>
   </div>
 )}
 <div className="mt-4">
@@ -714,12 +829,12 @@ export default function SimulacaoAuto() {
     value={form.outrosPedidos || ''}
     onChange={handleChange}
     placeholder={t('placeholders.otherRequests')}
-    className="w-full p-3 border rounded bg-white min-h-[90px]"
+    className="as-textarea min-h-[90px]"
   />
 </div>
               <div className="flex justify-between gap-2 mt-4">
-                <button type="button" onClick={handlePrev} className="px-6 py-2 bg-gray-200 rounded">{t('buttons.prev')}</button>
-                <button type="submit" disabled={isSubmitting} className={`px-6 py-2 text-white rounded font-bold transition ${isSubmitting ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>{isSubmitting ? t('buttons.simulating', { defaultValue: 'A enviar…' }) : t('buttons.simulate')}</button>
+                <button type="button" onClick={handlePrev} className="as-btn bg-gray-200 text-slate-900 hover:bg-gray-300">{t('buttons.prev')}</button>
+                <button type="submit" disabled={isSubmitting} className={`as-btn text-white ${isSubmitting ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>{isSubmitting ? t('buttons.simulating', { defaultValue: 'A enviar…' }) : t('buttons.simulate')}</button>
               </div>
                 {/* RGPD Checkbox moved to bottom */}
                 <div className="mb-4 mt-2 flex items-start gap-2">
@@ -727,8 +842,7 @@ export default function SimulacaoAuto() {
                     type="checkbox"
                     id="aceitaRgpd"
                     required
-                    className="accent-blue-700 w-5 h-5 mt-0.5"
-                    style={{ minWidth: 20, minHeight: 20 }}
+                    className="as-checkbox w-5 h-5 mt-0.5"
                     onInvalid={e => (e.target as HTMLInputElement).setCustomValidity(t('validations.rgpdRequired'))}
                     onInput={e => (e.target as HTMLInputElement).setCustomValidity('')}
                   />
@@ -738,10 +852,173 @@ export default function SimulacaoAuto() {
                 </div>
             </>
           )}
+          {step === 4 && (
+            <>
+              <h3 className="text-xl font-semibold text-blue-700 mb-4 text-center">
+                {base === 'en' ? '🎉 Simulation Result' : '🎉 Resultado da Simulação'}
+              </h3>
+              {/* A aguardar resultados do Playwright */}
+              {!simulationResult && (
+                <div className="flex flex-col items-center gap-4 py-6">
+                  <svg className="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  <p className="text-blue-800 font-medium text-center">
+                    {base === 'en' ? 'Calculating your quote, please wait…' : 'A calcular a sua cotação, aguarde…'}
+                  </p>
+                  <p className="text-sm text-gray-500 text-center">
+                    {base === 'en' ? 'This may take a few minutes.' : 'Este processo pode demorar alguns minutos.'}
+                  </p>
+                </div>
+              )}
+              {/* Falhou */}
+              {simulationResult?.status === 'failed' && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                  <p className="text-red-700 font-semibold">
+                    {base === 'en' ? 'We could not calculate an automatic quote.' : 'Não foi possível calcular uma cotação automática.'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {base === 'en' ? 'Our team will contact you with a personalised proposal.' : 'A nossa equipa irá contactá-lo com uma proposta personalizada.'}
+                  </p>
+                  <div className="flex justify-center mt-4">
+                    <a href={`/${base}/simulacao-auto`} className="as-btn bg-blue-700 text-white hover:bg-blue-900 text-sm"
+                      onClick={() => { sessionStorage.removeItem('sim_auto_step'); sessionStorage.removeItem('sim_auto_job_id'); }}>
+                      {base === 'en' ? 'New Simulation' : 'Nova Simulação'}
+                    </a>
+                  </div>
+                </div>
+              )}
+              {/* Resultados disponíveis */}
+              {simulationResult && simulationResult.status !== 'failed' && simulationResult.accordionValues && (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <p className="text-sm text-blue-600 font-semibold uppercase tracking-wide mb-1">
+                      {base === 'en' ? 'Vehicle' : 'Veículo'}
+                    </p>
+                    <p className="text-blue-900 font-bold text-lg">{form.marca} {form.modelo}{form.versao ? ` (${form.versao})` : ''} · {form.ano}</p>
+                    <p className="text-blue-700 text-sm">{form.tipoSeguro} · {form.matricula}</p>
+                  </div>
+                  <p className="text-base text-gray-800 text-center font-bold tracking-wide">
+                    {base === 'en' ? 'Choose your preferred payment frequency:' : 'Escolha a periodicidade de pagamento:'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { key: 'anual',      label: base === 'en' ? 'Annual'      : 'Anual',      icon: '📅', value: simulationResult.coberturasPremiumTotal ?? simulationResult.accordionValues?.['anual'] },
+                      { key: 'semestral',  label: base === 'en' ? 'Semi-annual' : 'Semestral',  icon: '🗓️', value: simulationResult.accordionValues?.['semestral'] },
+                      { key: 'trimestral', label: base === 'en' ? 'Quarterly'   : 'Trimestral', icon: '📆', value: simulationResult.accordionValues?.['trimestral'] },
+                      { key: 'mensal',     label: base === 'en' ? 'Monthly'     : 'Mensal',     icon: '💳', value: simulationResult.accordionValues?.['mensal'] },
+                    ] as const).map(({ key, label, icon, value }) => {
+                      const isSelected = selectedPeriodicity === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => { setSelectedPeriodicity(key); setChoiceSaved(false); }}
+                          className={`bg-white border-2 rounded-xl p-3 flex flex-col items-center shadow-sm transition-all focus:outline-none
+                            ${isSelected
+                              ? 'border-blue-600 ring-2 ring-blue-400 bg-blue-50 scale-[1.03]'
+                              : key === 'anual'
+                                ? 'border-green-300 bg-green-50 hover:border-green-500'
+                                : 'border-blue-200 hover:border-blue-400'
+                            }`}
+                        >
+                          <span className="text-2xl mb-1">{icon}</span>
+                          <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">{label}</span>
+                          <span className={`text-xl font-bold mt-1 ${isSelected ? 'text-blue-700' : key === 'anual' ? 'text-green-700' : 'text-blue-900'}`}>
+                            {value ?? '—'}
+                          </span>
+                          {isSelected && (
+                            <span className="mt-1 text-xs font-semibold text-blue-600">✓ {base === 'en' ? 'Selected' : 'Selecionado'}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 text-center pt-1">
+                    {base === 'en'
+                      ? 'Values are indicative. Final proposal subject to underwriting confirmation.'
+                      : 'Valores indicativos. Proposta final sujeita a confirmação da seguradora.'}
+                  </p>
+                  {/* Botões Continuar + Nova Simulação — sempre visíveis */}
+                  {!choiceSaved && (
+                    <div className="flex justify-center items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        disabled={!selectedPeriodicity || isSavingChoice}
+                        onClick={async () => {
+                          setIsSavingChoice(true);
+                          try {
+                            const uid = auth.currentUser?.uid;
+                            const periodicityValues: Record<string, string | null | undefined> = {
+                              anual: simulationResult.coberturasPremiumTotal ?? simulationResult.accordionValues?.['anual'],
+                              semestral: simulationResult.accordionValues?.['semestral'],
+                              trimestral: simulationResult.accordionValues?.['trimestral'],
+                              mensal: simulationResult.accordionValues?.['mensal'],
+                            };
+                            const chosenValue = periodicityValues[selectedPeriodicity!];
+                            if (uid && transferJobId) {
+                              await saveSimulation(uid, {
+                                type: 'auto',
+                                title: `${form.marca || ''} ${form.modelo || ''}`.trim() || 'Auto',
+                                summary: `${form.tipoSeguro} · ${form.matricula} · ${selectedPeriodicity} ${chosenValue ?? ''}`.trim(),
+                                status: 'quoted',
+                                cotacaoConfirmada: true,
+                                payload: {
+                                  email: form.email,
+                                  nome: form.nome,
+                                  contribuinte: form.contribuinte,
+                                  dataNascimento: form.dataNascimento,
+                                  dataCartaConducao: form.dataCartaConducao,
+                                  codigoPostal: form.codigoPostal,
+                                  matricula: form.matricula,
+                                  marca: form.marca,
+                                  modelo: form.modelo,
+                                  versao: form.versao,
+                                  ano: form.ano,
+                                  tipoSeguro: form.tipoSeguro,
+                                  coberturas: form.coberturas,
+                                  outrosPedidos: form.outrosPedidos,
+                                  periodicidadeEscolhida: selectedPeriodicity,
+                                  premioEscolhido: chosenValue,
+                                  todosPrecos: periodicityValues,
+                                  transferJobId,
+                                },
+                              }, { idempotencyKey: `${transferJobId}:choice:${selectedPeriodicity}` });
+                            }
+                            setChoiceSaved(true);
+                          } catch (e) {
+                            console.warn('[SimulacaoAuto] Falha a guardar escolha (ignorado):', e);
+                            setChoiceSaved(true);
+                          } finally {
+                            setIsSavingChoice(false);
+                          }
+                        }}
+                        className={`as-btn text-sm min-w-[140px] flex items-center justify-center gap-2 transition-all
+                          ${!selectedPeriodicity || isSavingChoice
+                            ? 'bg-blue-300 text-white cursor-not-allowed opacity-60'
+                            : 'bg-blue-700 text-white hover:bg-blue-900'
+                          }`}
+                      >
+                        {isSavingChoice
+                          ? <><svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>{base === 'en' ? 'Saving…' : 'A guardar…'}</>
+                          : base === 'en' ? 'Continue' : 'Continuar'
+                        }
+                      </button>
+                      <a href={`/${base}/simulacao-auto`} className="as-btn bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-sm"
+                        onClick={() => { sessionStorage.removeItem('sim_auto_step'); sessionStorage.removeItem('sim_auto_job_id'); }}>
+                        {base === 'en' ? 'New Simulation' : 'Nova Simulação'}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </form>
-        {resultado && <div className="mt-6 p-4 bg-blue-50 text-blue-900 rounded-lg text-center font-semibold shadow whitespace-pre-line">{resultado}</div>}
+        {resultado && step < 4 && <div className="mt-6 p-4 bg-blue-50 text-blue-900 rounded-lg text-center font-semibold shadow whitespace-pre-line">{resultado}</div>}
         {mensagem && (
-          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-lg font-semibold shadow transition-opacity duration-500 ${mensagemTipo === 'sucesso' ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'}`}
+          <div className={`as-alert fixed bottom-8 right-8 z-50 font-semibold shadow transition-opacity duration-500 ${mensagemTipo === 'sucesso' ? 'as-alert-success' : 'as-alert-error'}`}
             style={{ minWidth: '260px', maxWidth: '350px', textAlign: 'left' }}>
             {mensagem.split('\n').map((line, idx) => (
               <div key={idx} style={{ textAlign: 'left' }}>{line}</div>

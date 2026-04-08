@@ -1,62 +1,37 @@
-<!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
+<!-- Use this file to provide workspace-specific custom instructions to Copilot. -->
 
-# Copilot Instructions — Ansião Seguros Template
+# Copilot Instructions — frontendAS (Ansião Seguros)
 
-Este projeto é um template empresarial para "Ansião Seguros" usando React + Vite e Tailwind CSS. Foco principal: simulação de seguro auto; preparado para outros produtos e reutilização.
+App React 19 + Vite + Tailwind para simulações de seguros, com Firebase (Auth/Firestore/Storage), chat em tempo real e i18n PT/EN.
 
-## Visão Geral
-- Rotas com internacionalização: `/:lang(pt|en)/*` (redireciona `/` → `/pt`).
-- Build em GitHub Pages usa `base: '/frontendAS/'` (ver `vite.config.js`).
-- Firebase (Auth, Firestore, Storage) para autenticação, chat em tempo real e simulações.
-- EmailJS para envio de propostas e notificações de chat.
+## Arquitetura (o que desbloqueia produtividade)
+- Rotas com idioma: `/:lang(pt|en)/*`; `/` redireciona para `/pt` (`src/App.tsx`).
+- UI partilhada em `src/components/*`; páginas em `src/pages/*`.
+- Branding “multi-site” é decidido por `window.location.hostname` (ex.: `aurelio`, `sintra`, `pombal`, etc.) dentro de `src/App.tsx`.
 
-## Arquitetura e Fluxos
-- `src/pages/*`: páginas de produto e simulação (ex.: `SimulacaoAuto.tsx`).
-- `src/components/*`: UI compartilhada (`Seo`, `Header`, `ChatWidget`, etc.).
-- `src/context/AuthContext.tsx`: gere sessão, cria/atualiza `users/{uid}`, detecta admin via `admins/{uid}` ou `users/{uid}.isAdmin`.
-- `src/lib/chat.ts`: modelo `chats/{chatId=userId}` com subcoleção `messages`. Campos-chave: `firstNotified`, `unreadForAdmin`, `typingUser/Admin`, `lastMessageAt/Preview`.
-- Simulações: gravadas em `users/{uid}/simulations/{simulationId}` via `utils/simulations.ts` (com `idempotencyKey`). PDFs em Storage: `simulations/{uid}/{simulationId}/quote.pdf` e link `pdfUrl` no doc.
-- Funções Cloud (`functions/`): notificação no primeiro contacto do chat (`notifyOnFirstUserMessage`) e integração de EmailJS (ver `functions/README.md`).
+## i18n + links
+- i18n está em `src/i18n.ts` (detetor por `path` + ajuste para `import.meta.env.BASE_URL`, necessário em GH Pages).
+- Ao criar links, preserve o prefixo de idioma (`src/utils/lang.ts` `withLang()` é a helper preferida).
 
-## Workflows de Dev
-- Desenvolvimento: `npm run dev` (porta padrão 5175, auto-open). Acesse `http://localhost:5175/pt`.
-- Build local: `npm run build && npm run preview` (usa `base: '/'`).
-- Build para GitHub Pages: `npm run build:gh` e sirva com `npm run preview`; acesse `/frontendAS/pt`.
-- Testes de regras Firestore: `npm run test:rules` ou `npm run emulators:test:rules` (usa `@firebase/rules-unit-testing`).
-- Firebase:
-	- Regras: `firebase deploy --only firestore:rules` (veja `firestore.rules`).
-	- Emuladores: `firebase emulators:start --only functions,firestore` (ver `firebase.json`).
-	- Funções: `cd functions && npm run deploy`.
+## Workflows (scripts são a fonte de verdade)
+- Dev: `npm run dev` (porta preferida `5175`, `strictPort: false`, auto-open).
+- Build local/preview: `npm run build && npm run preview` → abrir `/<lang>` (modo `devlocal`, `base: '/'`).
+- GitHub Pages: `npm run build:gh` → abrir `/frontendAS/<lang>` (modo `gh`, `base: '/frontendAS/'`).
+- Firestore rules tests: `npm run test:rules` ou `npm run emulators:test:rules` (`tests/chat-rules-test.mjs`).
 
-## Convenções Importantes
-- Importar Firebase sempre de `src/firebase.ts` (singletons re-exportados), não inicializar localmente.
-- Chat: `chatId === userId`. Use helpers (`ensureChatForUser`, `addUserMessage`, `subscribeChats`, etc.) em `src/lib/chat.ts`.
-- Notificação de primeiro contacto: flip atómico de `firstNotified` via `runTransaction` no cliente; função Cloud também pode enviar email.
-- Autorização de Admin: preferir `admins/{uid}`; fallback `users/{uid}.isAdmin`.
-- SEO/i18n: use `Seo` e `useTranslation(namespace)`; defina `canonicalPath` com idioma atual.
-- URLs com base: para GH Pages, componha links como `origin + BASE_URL + lang` (ex.: inbox admin).
+## Firebase/Auth (convenções do projeto)
+- Não inicializar Firebase fora do módulo singleton: importar sempre de `src/firebase.ts` (re-exporta singletons definidos em `/typescript.ts`).
+- `src/context/AuthContext.tsx` faz “merge” de `users/{uid}` com dados básicos; **não** escrever `isAdmin` aqui.
+- Admin: preferir `admins/{uid}` (doc vazio basta); fallback `users/{uid}.isAdmin`.
 
-## Integrações e Configuração
-- EmailJS frontend: IDs em `src/emailjs.config.ts` (ex.: `EMAILJS_SERVICE_ID_CHAT`, `EMAILJS_TEMPLATE_ID_CHAT`, `EMAILJS_USER_ID_CHAT`).
-- EmailJS nas Functions: configure `EMAIL_NOTIFICATIONS_ENABLED`, `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `ADMIN_TO`, `SITE_BASE_URL`.
-- Firestore Rules: atuais são permissivas até `2025-12-31` (arquivo `firestore.rules`). Execute testes e planeie endurecimento.
+## Chat (modelo + notificações)
+- Modelo: `chats/{chatId}` onde `chatId === userId`; mensagens em `chats/{chatId}/messages/*` (`src/lib/chat.ts`, `src/components/ChatWidget.tsx`).
+- Metadados: `lastMessageAt`, `lastMessagePreview`, `unreadForAdmin/unreadForUser`, typing (`typingUser|Admin` + `typing*At`), `firstNotified`.
+- “Primeiro contacto” notifica via EmailJS no cliente (flip atómico de `firstNotified` com `runTransaction`). Também existe Cloud Function `notifyOnFirstUserMessage` (`functions/README.md`).
+- IDs EmailJS estão centralizados em `src/emailjs.config.ts` (não espalhar strings pelos componentes).
 
-## Exemplos Rápidos
-- Criar/usar chat do utilizador:
-	```ts
-	const chatId = await ensureChatForUser(uid);
-	await addUserMessage(chatId, uid, 'Primeira mensagem');
-	```
-- Marcar chat aberto pelo admin: `await markAdminOpened(chatId)`.
-- Guardar simulação Auto e enviar email:
-	```ts
-	await saveSimulation(uid, { type: 'auto', ... }, { idempotencyKey });
-	await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params, EMAILJS_USER_ID);
-	```
+## Simulações
+- Guardar em `users/{uid}/simulations/*` via `saveSimulation(uid, data, { idempotencyKey })` para upsert/idempotência (`src/utils/simulations.ts`).
 
-## Ficheiros Chave
-- `src/lib/chat.ts`, `src/context/AuthContext.tsx`, `src/pages/SimulacaoAuto.tsx`.
-- `src/emailjs.config.ts`, `src/i18n.ts`, `src/components/Seo.tsx`.
-- `firebase.json`, `firestore.rules`, `functions/README.md`, `functions/src/index.ts`.
-
-Se algo estiver ambíguo (ex.: regras de Storage, nomes de namespaces i18n), diga o que vai assumir e proponha uma verificação. Envie melhorias com base neste guia e peça validação quando necessário.
+## Regras (estado atual)
+- `firestore.rules` tem um fallback temporário allow-all até `2026-12-31`; `storage.rules` permite writes de PDFs por utilizadores autenticados (temporário). Se endurecer rules, atualizar o harness em `tests/chat-rules-test.mjs`.

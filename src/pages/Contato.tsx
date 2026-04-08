@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import Seo from "../components/Seo";
-import emailjs from "@emailjs/browser";
-import { EMAILJS_SERVICE_ID_GENERIC, EMAILJS_TEMPLATE_ID_GENERIC, EMAILJS_USER_ID_GENERIC } from "../emailjs.config";
+import { safeEmailSend, EMAILJS_SERVICE_ID_GENERIC, EMAILJS_TEMPLATE_ID_GENERIC, EMAILJS_USER_ID_GENERIC } from "../emailjs.config";
 import { Trans, useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
@@ -34,11 +33,35 @@ export default function Contato() {
   const { lang } = useParams();
   const base = lang === 'en' ? 'en' : 'pt';
   const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
+  const isAurelio = host.includes('aurelio');
   const isSintra = host.includes('sintraseg') || host.includes('sintra');
   const isPombal = host.includes('pombalseg') || host.includes('pombal');
   const isPovoa = host.includes('povoaseg') || host.includes('povoa');
   const isLisboa = host.includes('lisboaseg') || host.includes('lisboa');
   const isPorto = host.includes('portoseg') || host.includes('porto');
+
+  const brandName = isAurelio
+    ? 'Aurélio Seguros'
+    : isSintra
+      ? 'Sintra Seguros'
+      : isPombal
+        ? 'Pombal Seguros'
+        : isPovoa
+          ? 'Póvoa Seguros'
+          : isLisboa
+            ? 'Lisboa Seguros'
+            : isPorto
+              ? 'Porto Seguros'
+              : 'Ansião Seguros';
+  const siteDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const primaryPhone = isAurelio
+    ? { label: 'Aurélio', tel: '+351936677352', display: '+351 936 677 352' }
+    : { label: 'Carlos', tel: '+351962116764', display: '+351 962 116 764' };
+  const secondaryPhone = isAurelio
+    ? { label: 'Carlos', tel: '+351962116764', display: '+351 962 116 764' }
+    : null;
   const mapQuery = isLisboa
     ? 'Lisboa, Portugal'
     : isPovoa
@@ -132,6 +155,9 @@ export default function Contato() {
       nome: form.nome,
       email: form.email,
       telefone: form.telefone || '',
+      brand: brandName,
+      site_domain: siteDomain,
+      site_url: siteUrl,
       tipoSeguro,
       subjectEmail,
       resultado: resumo,
@@ -143,8 +169,7 @@ export default function Contato() {
       console.debug('[EmailJS][Contato] detalhes_html length:', templateParams.detalhes_html?.length);
     }
 
-    emailjs
-      .send(EMAILJS_SERVICE_ID_GENERIC, EMAILJS_TEMPLATE_ID_GENERIC, templateParams, EMAILJS_USER_ID_GENERIC)
+    safeEmailSend(EMAILJS_SERVICE_ID_GENERIC, EMAILJS_TEMPLATE_ID_GENERIC, templateParams, EMAILJS_USER_ID_GENERIC)
       .then(() => {
         setMensagem(t('messages.success'));
         setMensagemTipo('sucesso');
@@ -220,7 +245,7 @@ export default function Contato() {
         description={t('seoDesc')}
         canonicalPath={`/${base}/contato`}
       />
-      <div className="bg-white/80 backdrop-blur rounded-xl shadow-md p-6 md:p-8">
+      <div className="as-card p-6 md:p-8">
         <h2 className="text-3xl md:text-4xl font-bold text-blue-900 text-center">{t('pageTitle')}</h2>
         <p className="text-blue-700 text-center mt-2">{t('pageSubtitle')}</p>
         {/* Destaque de contacto telefónico */}
@@ -242,16 +267,27 @@ export default function Contato() {
             <div className="flex items-center gap-3">
               <div className="text-blue-900 font-medium">
                 <span className="sr-only">{t('phoneNumberLabel')}</span>
-                <a
-                  href={`tel:+351962116764`}
-                  className="text-2xl font-bold tracking-wide hover:underline whitespace-nowrap"
-                  title={t('callNowCta') as string}
-                >
-                  +351 962 116 764
-                </a>
+                <div className="flex flex-col">
+                  <a
+                    href={`tel:${primaryPhone.tel}`}
+                    className="text-2xl font-bold tracking-wide hover:underline whitespace-nowrap"
+                    title={t('callNowCta') as string}
+                  >
+                    {isAurelio ? `${primaryPhone.label}: ${primaryPhone.display}` : `${primaryPhone.display} - Carlos Valente`}
+                  </a>
+                  {secondaryPhone && (
+                    <a
+                      href={`tel:${secondaryPhone.tel}`}
+                      className="text-sm text-blue-800 hover:underline whitespace-nowrap"
+                      title={t('callNowCta') as string}
+                    >
+                      {secondaryPhone.label}: {secondaryPhone.display}
+                    </a>
+                  )}
+                </div>
               </div>
               <a
-                href={`tel:+351962116764`}
+                href={`tel:${primaryPhone.tel}`}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-500"
                 aria-label={t('callNowCta')}
               >
@@ -264,19 +300,19 @@ export default function Contato() {
           {/* Formulário */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-3">
-              <input name="nome" value={form.nome} onChange={handleChange} placeholder={t('placeholders.name')} className="w-full p-3 border border-blue-300 rounded-lg" required onInvalid={e=>setCustomValidity(e,t('validation.nameRequired'))} onInput={e=>setCustomValidity(e,'')} />
-              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder={t('placeholders.email')} className="w-full p-3 border border-blue-300 rounded-lg" required pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$" onInvalid={e=>setCustomValidity(e,t('validation.emailInvalid'))} onInput={e=>setCustomValidity(e,'')} />
-              <input name="telefone" value={form.telefone} onChange={handleChange} placeholder={t('placeholders.phoneOptional')} className="w-full p-3 border border-blue-300 rounded-lg" />
+              <input name="nome" value={form.nome} onChange={handleChange} placeholder={t('placeholders.name')} className="as-input" required onInvalid={e=>setCustomValidity(e,t('validation.nameRequired'))} onInput={e=>setCustomValidity(e,'')} />
+              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder={t('placeholders.email')} className="as-input" required pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$" onInvalid={e=>setCustomValidity(e,t('validation.emailInvalid'))} onInput={e=>setCustomValidity(e,'')} />
+              <input name="telefone" value={form.telefone} onChange={handleChange} placeholder={t('placeholders.phoneOptional')} className="as-input" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select name="tipoPedido" value={form.tipoPedido} onChange={handleChange} className="w-full p-3 border border-blue-300 rounded-lg" required>
+              <select name="tipoPedido" value={form.tipoPedido} onChange={handleChange} className="as-select" required>
                 <option>{t('requestType.info')}</option>
                 <option>{t('requestType.adhoc')}</option>
                 <option>{t('requestType.contact')}</option>
                 <option>{t('requestType.change')}</option>
                 <option>{t('requestType.other')}</option>
               </select>
-              <select name="produtoInteresse" value={form.produtoInteresse} onChange={handleChange} className="w-full p-3 border border-blue-300 rounded-lg">
+              <select name="produtoInteresse" value={form.produtoInteresse} onChange={handleChange} className="as-select">
                 <option value="">{t('placeholders.productInterestOptional')}</option>
                 <option>{t('productInterest.auto')}</option>
                 <option>{t('productInterest.life')}</option>
@@ -289,21 +325,21 @@ export default function Contato() {
                 <option>{t('productInterest.other')}</option>
               </select>
             </div>
-            <input name="assunto" value={form.assunto} onChange={handleChange} placeholder={t('placeholders.subjectOptional')} className="w-full p-3 border border-blue-300 rounded-lg" />
-            <textarea name="mensagem" value={form.mensagem} onChange={handleChange} placeholder={t('placeholders.message')} className="w-full p-3 border border-blue-300 rounded-lg min-h-[140px]" required onInvalid={e=>setCustomValidity(e,t('validation.messageRequired'))} onInput={e=>setCustomValidity(e,'')} />
+            <input name="assunto" value={form.assunto} onChange={handleChange} placeholder={t('placeholders.subjectOptional')} className="as-input" />
+            <textarea name="mensagem" value={form.mensagem} onChange={handleChange} placeholder={t('placeholders.message')} className="as-textarea" required onInvalid={e=>setCustomValidity(e,t('validation.messageRequired'))} onInput={e=>setCustomValidity(e,'')} />
             <label className="flex items-start gap-2 text-sm text-blue-800">
-              <input type="checkbox" name="aceitaRgpd" checked={form.aceitaRgpd} onChange={handleChange} required onInvalid={e=> (e.target as HTMLInputElement).setCustomValidity(t('validation.rgpdRequired'))} onInput={e=> (e.target as HTMLInputElement).setCustomValidity('')} />
+              <input type="checkbox" name="aceitaRgpd" checked={form.aceitaRgpd} onChange={handleChange} className="as-checkbox" required onInvalid={e=> (e.target as HTMLInputElement).setCustomValidity(t('validation.rgpdRequired'))} onInput={e=> (e.target as HTMLInputElement).setCustomValidity('')} />
               <span>
                 <Trans i18nKey="rgpdText" t={t} components={[<a href={`/${base}/politica-rgpd`} className="underline" target="_blank" rel="noreferrer" />]} />
               </span>
             </label>
 
             {mensagem && (
-              <div className={"p-3 rounded " + (mensagemTipo==='sucesso' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')}>{mensagem}</div>
+              <div className={mensagemTipo==='sucesso' ? 'as-alert-success' : 'as-alert-error'}>{mensagem}</div>
             )}
 
             <div className="flex justify-end">
-              <button type="submit" disabled={!canSubmit} className={`px-6 py-3 rounded font-bold text-white transition ${canSubmit ? 'bg-blue-700 hover:bg-blue-900' : 'bg-blue-300 cursor-not-allowed'}`}>
+              <button type="submit" disabled={!canSubmit} className="as-btn-primary">
                 {enviando ? t('messages.sending') : t('messages.submit')}
               </button>
             </div>
